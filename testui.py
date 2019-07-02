@@ -7,7 +7,8 @@ from darkflow.net.build import TFNet
 from PyQt5 import QtCore
 from PyQt5 import QtWidgets
 from PyQt5 import QtGui
-
+from PyQt5.QtWidgets  import QLineEdit,QPlainTextEdit,QMessageBox
+import pyttsx3
 
 class RecordVideo(QtCore.QObject):
     image_data = QtCore.pyqtSignal(np.ndarray)
@@ -39,40 +40,26 @@ class FaceDetectionWidget(QtWidgets.QWidget):
         super().__init__(parent)
         #self.classifier = cv2.CascadeClassifier(haar_cascade_filepath)
         self.image = QtGui.QImage()
+        # Create textbox
+        self.b = QPlainTextEdit(self)
         self._red = (0, 0, 255)
-        self._width = 2
+        self._width = 5
         self._min_size = (30, 30)
+
+
+        self.tosay = []
+
+    def load(self):
         self. options = {
                 'model': 'yolo-sign.cfg',
                 'load': 'yolo-sign_2000.weights',
                 'threshold': 0.2,
             }
-
         self.tfnet = TFNet(self.options)
         self.colors = [tuple(255 * np.random.rand(3)) for _ in range(10)]
-        self.tosay = []
-    # def detect_faces(self, image: np.ndarray):
-    #     # haarclassifiers work better in black and white
-    #     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    #     gray_image = cv2.equalizeHist(gray_image)
 
-    #     faces = self.classifier.detectMultiScale(gray_image,
-    #                                              scaleFactor=1.3,
-    #                                              minNeighbors=4,
-    #                                              flags=cv2.CASCADE_SCALE_IMAGE,
-    #                                              minSize=self._min_size)
 
-    #     return faces
-
-    def image_data_slot(self, image_data):
-        #faces = self.detect_faces(image_data)
-        # for (x, y, w, h) in faces:
-        #     cv2.rectangle(image_data,
-        #                   (x, y),
-        #                   (x+w, y+h),
-        #                   self._red,
-        #                   self._width)
-
+    def image_data_slot(self, image_data):      
         results = self.tfnet.return_predict(image_data)
         for color, result in zip(self.colors, results):
             tl = (result['topleft']['x'], result['topleft']['y'])
@@ -85,7 +72,11 @@ class FaceDetectionWidget(QtWidgets.QWidget):
                image_data, text, tl, cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 0), 2)
         self.image = self.get_qimage(image_data)
         if results:
-            self.tosay.append(results[0])
+            self.b.move(10,10)
+            self.b.resize(200,100)
+            self.tosay.append(result['label'])
+            self.b.insertPlainText(result['label'])
+            #self.b.setText(''.join(self.tosay))
         if self.image.size() != self.size():
             self.setFixedSize(self.image.size())
 
@@ -110,29 +101,39 @@ class FaceDetectionWidget(QtWidgets.QWidget):
         painter = QtGui.QPainter(self)
         painter.drawImage(0, 0, self.image)
         self.image = QtGui.QImage()
+    def speak(self):
+        self.engine = pyttsx3.init()
+        self.engine.setProperty('rate', 150)
+        self.engine.setProperty('volume', 0.9)
+        self.engine.say("JOPE")
+        self.engine.runAndWait()
+
+
+
+
 
 
 class MainWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        
         self.face_detection_widget = FaceDetectionWidget()
-
-        # TODO: set video port
         self.record_video = RecordVideo()
-
         image_data_slot = self.face_detection_widget.image_data_slot
         self.record_video.image_data.connect(image_data_slot)
-
         layout = QtWidgets.QVBoxLayout()
-
-        layout.addWidget(self.face_detection_widget)
+        layout.addWidget(self.face_detection_widget)   
+        self.load = QtWidgets.QPushButton('Load')
+        layout.addWidget(self.load)
+        self.load.clicked.connect(self.face_detection_widget.load)
         self.run_button = QtWidgets.QPushButton('Start')
         layout.addWidget(self.run_button)
         self.run_button.clicked.connect(self.record_video.start_recording)
-        self.run_button = QtWidgets.QPushButton('Stop')
-        layout.addWidget(self.run_button)
-        self.run_button.clicked.connect(self.record_video.stop_recording)
+        self.run_stop = QtWidgets.QPushButton('Stop')
+        layout.addWidget(self.run_stop)
+        self.run_stop.clicked.connect(self.record_video.stop_recording)
+        self.speak = QtWidgets.QPushButton('Speak')
+        layout.addWidget(self.speak)
+        self.speak.clicked.connect(self.face_detection_widget.speak)
         self.setLayout(layout)
 
 
@@ -148,3 +149,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
