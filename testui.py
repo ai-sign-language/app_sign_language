@@ -1,5 +1,6 @@
 import sys
 from os import path
+import os
 
 import cv2
 import numpy as np
@@ -35,17 +36,17 @@ class RecordVideo(QtCore.QObject):
             self.image_data.emit(data)
 
 
-class FaceDetectionWidget(QtWidgets.QWidget):
+class SignDetectionWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        #self.classifier = cv2.CascadeClassifier(haar_cascade_filepath)
         self.image = QtGui.QImage()
         # Create textbox
         self.b = QPlainTextEdit(self)
         self._red = (0, 0, 255)
         self._width = 5
         self._min_size = (30, 30)
-
+        self.sample = 0
+        self.loaded = False
 
         self.tosay = []
 
@@ -57,25 +58,29 @@ class FaceDetectionWidget(QtWidgets.QWidget):
             }
         self.tfnet = TFNet(self.options)
         self.colors = [tuple(255 * np.random.rand(3)) for _ in range(10)]
+        self.loaded = True
 
 
-    def image_data_slot(self, image_data):      
-        results = self.tfnet.return_predict(image_data)
-        for color, result in zip(self.colors, results):
-            tl = (result['topleft']['x'], result['topleft']['y'])
-            br = (result['bottomright']['x'], result['bottomright']['y'])
-            label = result['label']
-            confidence = result['confidence']
-            text = '{}: {:.0f}%'.format(label, confidence * 100)
-            image_data = cv2.rectangle(image_data, tl, br, color, 5)
-            image_data = cv2.putText(
-               image_data, text, tl, cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 0), 2)
+    def image_data_slot(self, image_data):
+        if self.loaded:
+            results = self.tfnet.return_predict(image_data)
+            for color, result in zip(self.colors, results):
+                tl = (result['topleft']['x'], result['topleft']['y'])
+                br = (result['bottomright']['x'], result['bottomright']['y'])
+                label = result['label']
+                confidence = result['confidence']
+                text = '{}: {:.0f}%'.format(label, confidence * 100)
+                image_data = cv2.rectangle(image_data, tl, br, color, 5)
+                image_data = cv2.putText(
+                image_data, text, tl, cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 0), 2)
+            if results:
+                self.b.move(10,10)
+                self.b.resize(200,100)
+                self.tosay.append(result['label'])
+                self.b.insertPlainText(result['label'])
         self.image = self.get_qimage(image_data)
-        if results:
-            self.b.move(10,10)
-            self.b.resize(200,100)
-            self.tosay.append(result['label'])
-            self.b.insertPlainText(result['label'])
+
+
             #self.b.setText(''.join(self.tosay))
         if self.image.size() != self.size():
             self.setFixedSize(self.image.size())
@@ -102,11 +107,9 @@ class FaceDetectionWidget(QtWidgets.QWidget):
         painter.drawImage(0, 0, self.image)
         self.image = QtGui.QImage()
     def speak(self):
-        self.engine = pyttsx3.init()
-        self.engine.setProperty('rate', 150)
-        self.engine.setProperty('volume', 0.9)
-        self.engine.say("JOPE")
-        self.engine.runAndWait()
+        myCmd = 'gtts-cli --lang es \''+ ''.join(self.tosay) +'\' | play -t mp3 -'
+        os.system(myCmd)
+
 
 
 
@@ -116,7 +119,7 @@ class FaceDetectionWidget(QtWidgets.QWidget):
 class MainWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.face_detection_widget = FaceDetectionWidget()
+        self.face_detection_widget = SignDetectionWidget()
         self.record_video = RecordVideo()
         image_data_slot = self.face_detection_widget.image_data_slot
         self.record_video.image_data.connect(image_data_slot)
