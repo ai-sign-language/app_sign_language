@@ -47,7 +47,8 @@ class SignDetectionWidget(QtWidgets.QWidget):
         self._min_size = (30, 30)
         self.sample = 0
         self.loaded = False
-
+        self.lastletter = ""
+        self.timeofletter = 0
         self.tosay = []
 
     def load(self):
@@ -76,8 +77,15 @@ class SignDetectionWidget(QtWidgets.QWidget):
             if results:
                 self.b.move(10,10)
                 self.b.resize(200,100)
-                self.tosay.append(result['label'])
-                self.b.insertPlainText(result['label'])
+                if self.lastletter == result['label'] and self.timeofletter == 20:
+                    self.tosay.append(result['label'])
+                    self.b.insertPlainText(result['label'])
+                    self.timeofletter= 0
+                    self.lastletter  = ""
+                else:
+                    self.timeofletter += 1
+                    self.lastletter = result['label']
+
         self.image = self.get_qimage(image_data)
 
 
@@ -106,6 +114,7 @@ class SignDetectionWidget(QtWidgets.QWidget):
         painter = QtGui.QPainter(self)
         painter.drawImage(0, 0, self.image)
         self.image = QtGui.QImage()
+        
     def speak(self):
         myCmd = 'gtts-cli --lang es \''+ ''.join(self.tosay) +'\' | play -t mp3 -'
         os.system(myCmd)
