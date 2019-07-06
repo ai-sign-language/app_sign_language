@@ -17,7 +17,6 @@ class RecordVideo(QtCore.QObject):
     def __init__(self, camera_port=0, parent=None):
         super().__init__(parent)
         self.camera = cv2.VideoCapture(camera_port)
-
         self.timer = QtCore.QBasicTimer()
 
     def start_recording(self):
@@ -41,7 +40,7 @@ class SignDetectionWidget(QtWidgets.QWidget):
         super().__init__(parent)
         self.image = QtGui.QImage()
         # Create textbox
-        self.b = QPlainTextEdit(self)
+        #self.text_screen = QPlainTextEdit(self)
         self._red = (0, 0, 255)
         self._width = 5
         self._min_size = (30, 30)
@@ -49,18 +48,29 @@ class SignDetectionWidget(QtWidgets.QWidget):
         self.loaded = False
         self.lastletter = ""
         self.timeofletter = 0
+        self.text_screen = QPlainTextEdit(self)
         self.tosay = []
 
     def load(self):
         self. options = {
                 'model': 'yolo-sign.cfg',
-                'load': 'yolo-sign_2000.weights',
+                'load': 'yolo-sign_33000.weights',
                 'threshold': 0.2,
             }
         self.tfnet = TFNet(self.options)
         self.colors = [tuple(255 * np.random.rand(3)) for _ in range(10)]
         self.loaded = True
+        self.tosay = []
 
+    def stop(self):
+        self.tfnet = ""
+        self.loaded = False
+        self.speak()
+    
+    def clean(self):
+        self.setText("")
+        self.tosay = []
+        self.text_screen = QPlainTextEdit(self)
 
     def image_data_slot(self, image_data):
         if self.loaded:
@@ -75,21 +85,26 @@ class SignDetectionWidget(QtWidgets.QWidget):
                 image_data = cv2.putText(
                 image_data, text, tl, cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 0), 2)
             if results:
-                self.b.move(10,10)
-                self.b.resize(200,100)
-                if self.lastletter == result['label'] and self.timeofletter == 20:
+                self.text_screen.move(10,10)
+                self.text_screen.resize(200,100)
+                if self.lastletter != result['label']:
+                    self.timeofletter= 0
+                    self.lastletter  = result['label']
+                if self.lastletter == result['label'] and self.timeofletter == 10:
+                    if result['label']== "ESPACIO":
+                        result['label']= " "
+                    if result['label']== "PARA":
+                        result['label']= ""
+                        self.stop()
                     self.tosay.append(result['label'])
-                    self.b.insertPlainText(result['label'])
+                    self.text_screen.insertPlainText(result['label'])
                     self.timeofletter= 0
                     self.lastletter  = ""
                 else:
                     self.timeofletter += 1
                     self.lastletter = result['label']
-
         self.image = self.get_qimage(image_data)
-
-
-            #self.b.setText(''.join(self.tosay))
+            #self.text_screen.setText(''.join(self.tosay))
         if self.image.size() != self.size():
             self.setFixedSize(self.image.size())
 
@@ -116,7 +131,14 @@ class SignDetectionWidget(QtWidgets.QWidget):
         self.image = QtGui.QImage()
         
     def speak(self):
-        myCmd = 'gtts-cli --lang es \''+ ''.join(self.tosay) +'\' | play -t mp3 -'
+        word = ''.join(self.tosay)
+        sufix1 = 'SION'
+        sufix2 = 'CION'
+        if word.find(sufix1):
+            word=word.replace(sufix1,"SIÓN")
+        if word.find(sufix2):
+            word=word.replace(sufix2,"CIÓN")
+        myCmd = 'gtts-cli --lang es \''+ word +'\' | play -t mp3 -'
         os.system(myCmd)
 
 
@@ -146,12 +168,14 @@ class MainWidget(QtWidgets.QWidget):
         self.speak = QtWidgets.QPushButton('Speak')
         layout.addWidget(self.speak)
         self.speak.clicked.connect(self.face_detection_widget.speak)
+        self.clean = QtWidgets.QPushButton('Clean')
+        layout.addWidget(self.clean)
+        self.speak.clicked.connect(self.face_detection_widget.clean)
         self.setLayout(layout)
 
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
-
     main_window = QtWidgets.QMainWindow()
     main_widget = MainWidget()
     main_window.setCentralWidget(main_widget)
